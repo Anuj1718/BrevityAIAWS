@@ -670,7 +670,15 @@ export default function Upload() {
       setProcessingStep('Cleaning text...');
       setProgress(75);
       
-      const cleanURL = `${API_BASE}/api/clean/text/${encodedFilename}?remove_stopwords=true&normalize_whitespace=true&remove_special_chars=true&min_sentence_length=15`;
+      const cleanParams = new URLSearchParams({
+        remove_stopwords: 'true',
+        normalize_whitespace: 'true',
+        remove_special_chars: settings.useOcr ? 'false' : 'true',
+        min_sentence_length: settings.useOcr ? '5' : '15',
+        ocr_mode: settings.useOcr ? 'true' : 'false',
+      });
+
+      const cleanURL = `${API_BASE}/api/clean/text/${encodedFilename}?${cleanParams}`;
       const cleanResp = await fetch(cleanURL, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 

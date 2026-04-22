@@ -27,7 +27,8 @@ class TextCleaner:
         remove_stopwords: bool = True,
         normalize_whitespace: bool = True,
         remove_special_chars: bool = False,
-        min_sentence_length: int = 10
+        min_sentence_length: int = 10,
+        ocr_mode: bool = False
     ) -> Dict[str, Any]:
         """
         Clean and normalize extracted text.
@@ -61,16 +62,24 @@ class TextCleaner:
         cleaned_text = self.text_utils.remove_page_markers(cleaned_text)
         
         if normalize_whitespace:
-            cleaned_text = self._normalize_whitespace(cleaned_text)
+            cleaned_text = self._normalize_ocr_whitespace(cleaned_text) if ocr_mode else self._normalize_whitespace(cleaned_text)
         
-        if remove_special_chars:
+        if remove_special_chars and not ocr_mode:
             cleaned_text = self._remove_special_characters(cleaned_text)
         
         # Split into sentences
         sentences = self.text_utils.split_into_sentences(cleaned_text)
+        original_sentence_count = len(sentences)
+
+        if ocr_mode and remove_special_chars:
+            sentences = [self._remove_special_characters(sentence) for sentence in sentences]
         
         # Filter sentences by length
         sentences = [s for s in sentences if len(s.strip()) >= min_sentence_length]
+
+        # OCR text can be fragmented; if filtering removes everything, keep the original candidates.
+        if not sentences and original_sentence_count > 0:
+            sentences = self.text_utils.split_into_sentences(cleaned_text)
         
         # Remove stopwords if requested
         if remove_stopwords:
@@ -103,7 +112,8 @@ class TextCleaner:
                 "remove_stopwords": remove_stopwords,
                 "normalize_whitespace": normalize_whitespace,
                 "remove_special_chars": remove_special_chars,
-                "min_sentence_length": min_sentence_length
+                "min_sentence_length": min_sentence_length,
+                "ocr_mode": ocr_mode
             }
         }
         
@@ -120,6 +130,13 @@ class TextCleaner:
         # Remove leading/trailing whitespace
         text = text.strip()
         return text
+
+    def _normalize_ocr_whitespace(self, text: str) -> str:
+        """Normalize OCR text while preserving line boundaries for sentence recovery."""
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n")]
+        lines = [line for line in lines if line]
+        return "\n".join(lines)
     
     def _remove_special_characters(self, text: str) -> str:
         """Remove special characters from text."""

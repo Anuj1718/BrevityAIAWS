@@ -39,8 +39,56 @@ class TextUtils:
         return text
 
     def split_into_sentences(self, text: str) -> List[str]:
-        sentences = sent_tokenize(text)
-        return [s.strip() for s in sentences if s.strip()]
+        if not text:
+            return []
+
+        normalized_text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+        try:
+            sentences = sent_tokenize(normalized_text)
+        except LookupError:
+            sentences = []
+
+        sentences = [sentence.strip() for sentence in sentences if sentence and sentence.strip()]
+        if sentences:
+            return sentences
+
+        # OCR output often arrives as newline-separated fragments without punctuation.
+        line_candidates = [
+            re.sub(r"^[\-•*\d\.)\s]+", "", line).strip()
+            for line in normalized_text.split("\n")
+            if line.strip()
+        ]
+        line_candidates = [line for line in line_candidates if line]
+
+        if len(line_candidates) > 1:
+            line_sentences: List[str] = []
+            for line in line_candidates:
+                pieces = re.split(r"(?<=[.!?।])\s+|\s{2,}", line)
+                pieces = [piece.strip() for piece in pieces if piece and piece.strip()]
+                line_sentences.extend(pieces or [line])
+
+            if line_sentences:
+                return line_sentences
+
+        # Final fallback: chunk very long OCR blocks into pseudo-sentences.
+        return self.chunk_text_by_words(normalized_text, chunk_size=25)
+
+    def chunk_text_by_words(self, text: str, chunk_size: int = 25) -> List[str]:
+        """Split long text into pseudo-sentences when punctuation is unavailable."""
+        if not text:
+            return []
+
+        words = [word for word in text.split() if word.strip()]
+        if not words:
+            return []
+
+        chunk_size = max(5, chunk_size)
+        chunks = [
+            " ".join(words[index:index + chunk_size]).strip()
+            for index in range(0, len(words), chunk_size)
+        ]
+        return [chunk for chunk in chunks if chunk]
 
     def split_into_words(self, text: str) -> List[str]:
         words = word_tokenize(text)

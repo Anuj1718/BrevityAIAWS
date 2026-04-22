@@ -16,7 +16,8 @@ async def clean_text(
     remove_stopwords: bool = Query(True, description="Remove stopwords"),
     normalize_whitespace: bool = Query(True, description="Normalize whitespace"),
     remove_special_chars: bool = Query(False, description="Remove special characters"),
-    min_sentence_length: int = Query(10, description="Minimum sentence length")
+    min_sentence_length: int = Query(10, description="Minimum sentence length"),
+    ocr_mode: bool = Query(False, description="Preserve OCR line boundaries during cleaning")
 ):
     """
     Clean and normalize extracted text from a PDF.
@@ -38,7 +39,8 @@ async def clean_text(
             remove_stopwords=remove_stopwords,
             normalize_whitespace=normalize_whitespace,
             remove_special_chars=remove_special_chars,
-            min_sentence_length=min_sentence_length
+            min_sentence_length=min_sentence_length,
+            ocr_mode=ocr_mode
         )
         
         return JSONResponse(

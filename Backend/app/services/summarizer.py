@@ -64,7 +64,13 @@ class OptimizedTextSummarizer:
         with open(cleaning_metadata_path, 'r', encoding='utf-8') as f:
             cleaning_data = json.load(f)
         
-        sentences = cleaning_data["sentences"]
+        sentences = cleaning_data.get("sentences") or []
+        if not sentences:
+            cleaned_text = cleaning_data.get("cleaned_text", "")
+            sentences = self.text_utils.split_into_sentences(cleaned_text)
+        if not sentences:
+            cleaned_text = cleaning_data.get("cleaned_text", "")
+            sentences = self.text_utils.chunk_text_by_words(cleaned_text, chunk_size=25)
         original_sentences = len(sentences)
         if original_sentences == 0:
             raise ValueError("No sentences found in cleaned text")
@@ -123,10 +129,7 @@ class OptimizedTextSummarizer:
         use_pipeline: bool = True
     ) -> Dict[str, Any]:
         """Optimized abstractive summary with pipeline and chunking improvements."""
-        
-        if not TORCH_AVAILABLE:
-            raise ImportError("PyTorch and transformers are required for abstractive summarization. Please install them first.")
-            
+
         cleaning_metadata_path = os.path.join(self.output_dir, f"{os.path.splitext(filename)[0]}_cleaning_metadata.json")
         if not os.path.exists(cleaning_metadata_path):
             raise FileNotFoundError(f"Cleaned text not found for: {filename}")
@@ -135,6 +138,14 @@ class OptimizedTextSummarizer:
             cleaning_data = json.load(f)
         text = cleaning_data["cleaned_text"]
         original_length = len(text)
+
+        if not TORCH_AVAILABLE:
+            return await self._heuristic_abstractive_summary(
+                filename=filename,
+                text=text,
+                max_length=max_length,
+                min_length=min_length,
+            )
 
         # Use pipeline for better performance if available
         if use_pipeline and self._summarization_pipeline is None:
@@ -173,6 +184,90 @@ class OptimizedTextSummarizer:
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
         return metadata
+
+    async def _heuristic_abstractive_summary(
+        self,
+        filename: str,
+        text: str,
+        max_length: int,
+        min_length: int,
+    ) -> Dict[str, Any]:
+        """Provide a lightweight abstractive-style fallback when ML models are unavailable."""
+        sentences = self.text_utils.split_into_sentences(text)
+        if not sentences:
+            sentences = self.text_utils.chunk_text_by_words(text, chunk_size=20)
+
+        if not sentences:
+            raise ValueError("No sentences available for abstractive summarization")
+
+        target_count = max(2, min(5, len(sentences)))
+        summary_sentences = await self._optimized_tfidf_summarize(sentences, target_count)
+        summary_sentences = [self._lightly_rephrase_sentence(sentence) for sentence in summary_sentences]
+        summary_text = self._compose_narrative_summary(summary_sentences, max_length, min_length)
+
+        original_word_count = len(text.split())
+        summary_word_count = len(summary_text.split())
+        compression_ratio = 1 - (summary_word_count / original_word_count) if original_word_count > 0 else 0
+
+        output_filename = f"{os.path.splitext(filename)[0]}_abstractive_summary.txt"
+        output_path = os.path.join(self.output_dir, output_filename)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(summary_text)
+
+        metadata = {
+            "summary_text": summary_text,
+            "original_length": original_word_count,
+            "summary_length": summary_word_count,
+            "compression_ratio": compression_ratio,
+            "model": "heuristic-fallback",
+            "max_length": max_length,
+            "min_length": min_length,
+            "file_path": output_path,
+            "processing_method": "heuristic",
+            "fallback_used": True,
+        }
+
+        metadata_path = os.path.join(self.output_dir, f"{os.path.splitext(filename)[0]}_abstractive_summary_metadata.json")
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+        return metadata
+
+    def _lightly_rephrase_sentence(self, sentence: str) -> str:
+        """Make summary sentences read more like prose."""
+        sentence = re.sub(r"^[\-•*\d\.)\s]+", "", sentence).strip()
+        sentence = re.sub(r"\s+", " ", sentence)
+        if not sentence:
+            return sentence
+        return sentence[0].upper() + sentence[1:]
+
+    def _compose_narrative_summary(self, sentences: List[str], max_length: int, min_length: int) -> str:
+        """Combine selected sentences into a compact narrative paragraph."""
+        if not sentences:
+            return ""
+
+        parts: List[str] = []
+        for index, sentence in enumerate(sentences):
+            sentence = sentence.strip().rstrip(".")
+            if not sentence:
+                continue
+
+            if index == 0:
+                parts.append(f"This document highlights that {sentence[0].lower() + sentence[1:] if len(sentence) > 1 else sentence}.")
+            elif index == len(sentences) - 1:
+                parts.append(f"Overall, {sentence[0].lower() + sentence[1:] if len(sentence) > 1 else sentence}.")
+            else:
+                parts.append(f"Additionally, {sentence[0].lower() + sentence[1:] if len(sentence) > 1 else sentence}.")
+
+        summary_text = " ".join(parts).strip()
+        if len(summary_text.split()) < min_length:
+            summary_text = " ".join(sentences).strip()
+
+        words = summary_text.split()
+        if len(words) > max_length:
+            summary_text = " ".join(words[:max_length]).rstrip() + "..."
+
+        return summary_text
 
     def _load_abstractive_model(self, model_name: str):
         """Load abstractive model with optimizations."""
