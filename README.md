@@ -95,6 +95,7 @@ Brevity AI transforms lengthy PDF documents into concise, meaningful summaries u
 ### Deployment
 | Platform | Component |
 |----------|-----------|
+| **AWS** | Production deployment for frontend + backend + storage |
 | **Vercel** | Frontend hosting with edge CDN |
 | **Render** | Backend hosting (Web Service) |
 | **Firebase** | Auth & Database |
@@ -208,6 +209,45 @@ uvicorn app.main:app --reload
 ---
 
 ## 🌐 Deployment
+
+### AWS Deployment Path
+
+This is the recommended deployment path if you want the project to look more production-grade to externals.
+
+#### Free-tier first setup
+1. Frontend on AWS Amplify using [Frontend/amplify.yml](Frontend/amplify.yml).
+2. Backend on a free-tier EC2 instance using [Backend/start_ec2.sh](Backend/start_ec2.sh).
+3. Keep uploads and outputs on the EC2 disk first. Move them to S3 only if you need persistence across rebuilds.
+4. Test with a small PDF first so you can judge whether free-tier speed is acceptable.
+
+#### Recommended setup
+1. Frontend on S3 + CloudFront or AWS Amplify.
+2. Backend on Lightsail or EC2 using the backend [Dockerfile](Backend/Dockerfile).
+3. Uploaded PDFs and generated outputs on persistent storage. For a VM-based setup, use the mounted disk path via `UPLOADS_DIR` and `OUTPUTS_DIR`. For a fuller production setup, move storage to S3 later.
+
+#### What to configure
+1. Set `ALLOWED_ORIGINS` to your deployed frontend URL.
+2. Set `VITE_API_URL` in the frontend to the backend URL.
+3. Set `UPLOADS_DIR` and `OUTPUTS_DIR` to a persistent path on the AWS machine or mounted volume.
+4. Install Tesseract and language packs on the backend host, or use the Docker image.
+5. Keep `FREE_TIER_MODE=true` on backend and `VITE_FREE_TIER_MODE=true` on frontend while testing free hosting.
+
+#### Free-tier mode behavior
+1. Abstractive and formatted hybrid requests return an extractive fallback to avoid model-memory failures.
+2. Frontend defaults are tuned for lighter processing (extractive-first and lower summary lengths).
+3. You can disable this later by setting `FREE_TIER_MODE=false` and `VITE_FREE_TIER_MODE=false` when moving to paid compute.
+
+#### Why this works well
+1. AWS branding is strong for presentations.
+2. A VM-based backend avoids cold-start pain better than tiny free containers.
+3. Persistent storage keeps uploaded PDFs and summaries available between restarts.
+
+#### Minimal deploy sequence
+1. Build and push the backend container image.
+2. Start the backend on Lightsail or EC2.
+3. Deploy the frontend static build to AWS hosting.
+4. Point the frontend to the backend API URL.
+5. Test upload, extraction, summarization, and translation end-to-end.
 
 ### Frontend → Vercel
 1. Connect GitHub repository to Vercel

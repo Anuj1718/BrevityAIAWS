@@ -6,10 +6,27 @@ Main application file that sets up the FastAPI server and includes all routers.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
+from pathlib import Path
 import os
 
 # Import routers
 from app.routers import upload, extract, clean, summarize, translate_summary
+
+load_dotenv()
+
+
+def _parse_origins(value: str) -> list[str]:
+    origins = [origin.strip() for origin in value.split(",") if origin.strip()]
+    return origins or ["http://localhost:3000", "http://localhost:5173"]
+
+
+def _resolve_directory(env_name: str, default_path: Path) -> Path:
+    configured_value = os.getenv(env_name)
+    if configured_value:
+        return Path(configured_value).expanduser().resolve()
+    return default_path
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -21,23 +38,23 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=_parse_origins(os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Create necessary directories
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
-OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+BASE_DIR = Path(__file__).resolve().parent
+UPLOADS_DIR = _resolve_directory("UPLOADS_DIR", BASE_DIR / "uploads")
+OUTPUTS_DIR = _resolve_directory("OUTPUTS_DIR", BASE_DIR / "outputs")
 
-os.makedirs(UPLOADS_DIR, exist_ok=True)
-os.makedirs(OUTPUTS_DIR, exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount static files for serving uploaded files
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
-app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/outputs", StaticFiles(directory=str(OUTPUTS_DIR)), name="outputs")
 
 # Include routers
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])

@@ -12,14 +12,14 @@ class FileHandler:
     """Handles file operations for uploaded PDFs."""
     
     def __init__(self):
-        self.upload_dir = "uploads"
-        self.output_dir = "outputs"
+        self.upload_dir = Path(os.getenv("UPLOADS_DIR", "uploads"))
+        self.output_dir = Path(os.getenv("OUTPUTS_DIR", "outputs"))
         self.ensure_directories()
     
     def ensure_directories(self):
         """Ensure upload and output directories exist."""
-        os.makedirs(self.upload_dir, exist_ok=True)
-        os.makedirs(self.output_dir, exist_ok=True)
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
     
     async def save_uploaded_file(self, file) -> str:
         """
@@ -33,14 +33,15 @@ class FileHandler:
         """
         # Generate unique filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{timestamp}_{file.filename}"
-        file_path = os.path.join(self.upload_dir, filename)
+        original_name = Path(file.filename).name
+        filename = f"{timestamp}_{original_name}"
+        file_path = self.upload_dir / filename
         
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        return file_path
+        return str(file_path)
     
     def list_uploaded_files(self) -> List[Dict[str, Any]]:
         """
@@ -52,11 +53,11 @@ class FileHandler:
         files = []
         for filename in os.listdir(self.upload_dir):
             if filename.lower().endswith('.pdf'):
-                file_path = os.path.join(self.upload_dir, filename)
+                file_path = self.upload_dir / filename
                 file_stat = os.stat(file_path)
                 files.append({
                     "filename": filename,
-                    "file_path": file_path,
+                    "file_path": str(file_path),
                     "size": file_stat.st_size,
                     "created": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
                     "modified": datetime.fromtimestamp(file_stat.st_mtime).isoformat()
@@ -74,9 +75,9 @@ class FileHandler:
         Returns:
             bool: True if deleted successfully, False otherwise
         """
-        file_path = os.path.join(self.upload_dir, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        file_path = self.upload_dir / Path(filename).name
+        if file_path.exists():
+            file_path.unlink()
             return True
         return False
     
@@ -90,7 +91,7 @@ class FileHandler:
         Returns:
             str: Full path to the file
         """
-        return os.path.join(self.upload_dir, filename)
+        return str(self.upload_dir / Path(filename).name)
     
     def file_exists(self, filename: str) -> bool:
         """
@@ -102,8 +103,8 @@ class FileHandler:
         Returns:
             bool: True if file exists, False otherwise
         """
-        file_path = os.path.join(self.upload_dir, filename)
-        return os.path.exists(file_path)
+        file_path = self.upload_dir / Path(filename).name
+        return file_path.exists()
     
     def get_file_size(self, filename: str) -> int:
         """
@@ -115,7 +116,7 @@ class FileHandler:
         Returns:
             int: File size in bytes
         """
-        file_path = os.path.join(self.upload_dir, filename)
-        if os.path.exists(file_path):
-            return os.path.getsize(file_path)
+        file_path = self.upload_dir / Path(filename).name
+        if file_path.exists():
+            return file_path.stat().st_size
         return 0

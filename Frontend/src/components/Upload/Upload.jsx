@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import './Upload.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const FREE_TIER_MODE = (import.meta.env.VITE_FREE_TIER_MODE || 'true').toLowerCase() === 'true';
 
 export default function Upload() {
   const [files, setFiles] = useState([]);
@@ -20,15 +21,15 @@ export default function Upload() {
   // Enhanced settings state
   const [settings, setSettings] = useState({
     useOcr: false,
-    ocrQuality: 'high',
+    ocrQuality: 'medium',
     preprocessImages: true,
     ocrLanguages: 'eng+hin+mar',
-    summaryType: 'abstractive',
-    maxLength: 200,
-    minLength: 50,
-    extractiveRatio: 0.5,
+    summaryType: FREE_TIER_MODE ? 'extractive' : 'abstractive',
+    maxLength: FREE_TIER_MODE ? 150 : 200,
+    minLength: FREE_TIER_MODE ? 30 : 50,
+    extractiveRatio: FREE_TIER_MODE ? 0.35 : 0.5,
     useCache: true,
-    usePipeline: true
+    usePipeline: !FREE_TIER_MODE
   });
 
   const [processingStep, setProcessingStep] = useState('');
@@ -728,7 +729,8 @@ export default function Upload() {
         url = `${API_BASE}/api/summarize/extractive/${encodedFilename}`;
         query = new URLSearchParams({ 
           use_cache: settings.useCache,
-          max_sentences: Math.floor(settings.maxLength / 20) // Rough estimate
+          summary_ratio: String(settings.extractiveRatio),
+          algorithm: 'textrank'
         }).toString();
       } else if (type === 'abstractive') {
         url = `${API_BASE}/api/summarize/abstractive/${encodedFilename}`;
@@ -772,6 +774,10 @@ export default function Upload() {
       if (!resp.ok) {
         const msg = (json && (json.detail || json.message)) || `status ${resp.status}`;
         throw new Error(`Summary generation failed: ${msg}`);
+      }
+
+      if (json?.fallback_used) {
+        setActiveSummary('extractive');
       }
 
       setSummaryData(json);
@@ -915,8 +921,8 @@ export default function Upload() {
                     onChange={(e) => updateSettings({ summaryType: e.target.value })}
                     className="setting-select"
                   >
+                    <option value="extractive">Extractive (Fastest for free tier)</option>
                     <option value="abstractive">Abstractive (AI-generated)</option>
-                    <option value="extractive">Extractive (Key sentences)</option>
                     <option value="formatted-hybrid">Formatted Hybrid (Structured)</option>
                   </select>
                 </div>

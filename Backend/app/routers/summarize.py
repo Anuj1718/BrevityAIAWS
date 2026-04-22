@@ -7,10 +7,12 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from app.services.summarizer import OptimizedTextSummarizer
 from app.services.cleaner import TextCleaner
+import os
 
 router = APIRouter()
 summarizer = OptimizedTextSummarizer()
 cleaner = TextCleaner()
+FREE_TIER_MODE = os.getenv("FREE_TIER_MODE", "true").lower() == "true"
 
 # -------------------------------
 # Optimized Extractive Summary
@@ -53,6 +55,18 @@ async def abstractive_summary(
     use_pipeline: bool = Query(True, description="Use pipeline for better performance")
 ):
     try:
+        if FREE_TIER_MODE:
+            fallback = await summarizer.extractive_summary(filename, summary_ratio=0.35, algorithm="textrank", use_cache=True)
+            return JSONResponse(status_code=200, content={
+                "message": "Free-tier mode: returning extractive fallback instead of abstractive summary",
+                "filename": filename,
+                **fallback,
+                "requested_type": "abstractive",
+                "served_type": "extractive",
+                "fallback_used": True,
+                "optimized": True
+            })
+
         try:
             result = await summarizer.abstractive_summary(filename, max_length, min_length, model, use_pipeline)
         except FileNotFoundError:
@@ -82,6 +96,18 @@ async def hybrid_summary(
     use_pipeline: bool = Query(True, description="Use pipeline for better performance")
 ):
     try:
+        if FREE_TIER_MODE:
+            fallback = await summarizer.extractive_summary(filename, summary_ratio=extractive_ratio, algorithm="textrank", use_cache=True)
+            return JSONResponse(status_code=200, content={
+                "message": "Free-tier mode: returning extractive fallback instead of hybrid summary",
+                "filename": filename,
+                **fallback,
+                "requested_type": "hybrid",
+                "served_type": "extractive",
+                "fallback_used": True,
+                "optimized": True
+            })
+
         try:
             result = await summarizer.hybrid_summary(filename, extractive_ratio, max_length, min_length, use_pipeline)
         except FileNotFoundError:
@@ -111,6 +137,18 @@ async def formatted_hybrid_summary(
     use_pipeline: bool = Query(True, description="Use pipeline for better performance")
 ):
     try:
+        if FREE_TIER_MODE:
+            fallback = await summarizer.extractive_summary(filename, summary_ratio=extractive_ratio, algorithm="textrank", use_cache=True)
+            return JSONResponse(status_code=200, content={
+                "message": "Free-tier mode: returning extractive fallback instead of formatted hybrid summary",
+                "filename": filename,
+                **fallback,
+                "requested_type": "formatted_hybrid",
+                "served_type": "extractive",
+                "fallback_used": True,
+                "optimized": True
+            })
+
         try:
             result = await summarizer.formatted_hybrid_summary(filename, extractive_ratio, max_length, min_length, use_pipeline)
         except FileNotFoundError:
