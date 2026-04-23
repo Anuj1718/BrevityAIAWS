@@ -50,7 +50,7 @@ async def abstractive_summary(
     filename: str,
     max_length: int = Query(150, description="Maximum length of summary"),
     min_length: int = Query(30, description="Minimum length of summary"),
-    model: str = Query("facebook/bart-large-cnn", description="Model to use for abstractive summarization"),
+    model: str = Query("sshleifer/distilbart-cnn-12-6", description="Model to use for abstractive summarization"),
     use_pipeline: bool = Query(True, description="Use pipeline for better performance")
 ):
     try:

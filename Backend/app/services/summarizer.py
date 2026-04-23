@@ -125,7 +125,7 @@ class OptimizedTextSummarizer:
         filename: str, 
         max_length: int = 150, 
         min_length: int = 30, 
-        model: str = "facebook/bart-large-cnn",
+        model: str = "sshleifer/distilbart-cnn-12-6",
         use_pipeline: bool = True
     ) -> Dict[str, Any]:
         """Optimized abstractive summary with pipeline and chunking improvements."""
@@ -138,6 +138,11 @@ class OptimizedTextSummarizer:
             cleaning_data = json.load(f)
         text = cleaning_data["cleaned_text"]
         original_length = len(text)
+        original_word_count = len(text.split())
+
+        # Keep abstractive generation practical for very large documents.
+        if original_word_count > 2600:
+            text = await self._reduce_text_for_abstractive(text, target_words=2200)
 
         if not TORCH_AVAILABLE:
             return await self._heuristic_abstractive_summary(
@@ -160,7 +165,6 @@ class OptimizedTextSummarizer:
             summary_text = await self._chunked_summarize(text, max_length, min_length)
 
         # Calculate using word counts
-        original_word_count = len(text.split())
         summary_word_count = len(summary_text.split())
         compression_ratio = 1 - (summary_word_count / original_word_count) if original_word_count > 0 else 0
 
@@ -184,6 +188,27 @@ class OptimizedTextSummarizer:
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
         return metadata
+
+    async def _reduce_text_for_abstractive(self, text: str, target_words: int = 2200) -> str:
+        """Reduce long text before abstractive generation to keep latency predictable."""
+        words = text.split()
+        if len(words) <= target_words:
+            return text
+
+        sentences = self.text_utils.split_into_sentences(text)
+        if not sentences:
+            return " ".join(words[:target_words])
+
+        reduction_ratio = max(0.15, min(0.65, target_words / max(len(words), 1)))
+        target_sentences = max(10, int(len(sentences) * reduction_ratio))
+        selected_sentences = await self._optimized_tfidf_summarize(sentences, target_sentences)
+        reduced_text = " ".join(selected_sentences)
+
+        reduced_words = reduced_text.split()
+        if len(reduced_words) > target_words:
+            reduced_text = " ".join(reduced_words[:target_words])
+
+        return reduced_text
 
     async def _heuristic_abstractive_summary(
         self,
@@ -296,7 +321,7 @@ class OptimizedTextSummarizer:
     async def _pipeline_summarize(self, text: str, max_length: int, min_length: int) -> str:
         """Use pipeline for faster summarization."""
         # Split text into manageable chunks
-        chunk_size = 1000
+        chunk_size = 420
         sentences = text.split(". ")
         chunks, temp_chunk = [], ""
         
@@ -321,12 +346,33 @@ class OptimizedTextSummarizer:
                         chunk,
                         max_length=max_length,
                         min_length=min_length,
-                        do_sample=False
+                        do_sample=False,
+                        num_beams=2,
+                        early_stopping=True
                     )[0]["summary_text"]
                 )
                 summaries.append(summary)
 
-        return " ".join(summaries)
+        combined_summary = " ".join(summaries)
+
+        # Second pass keeps output coherent when many chunks are summarized.
+        if len(summaries) > 6 and len(combined_summary.split()) > (max_length * 2):
+            final_max = max(max_length, 120)
+            final_min = max(20, min(min_length, 60))
+            final_summary = await loop.run_in_executor(
+                self._thread_pool,
+                lambda: self._summarization_pipeline(
+                    combined_summary,
+                    max_length=final_max,
+                    min_length=final_min,
+                    do_sample=False,
+                    num_beams=2,
+                    early_stopping=True
+                )[0]["summary_text"]
+            )
+            return final_summary
+
+        return combined_summary
 
     async def _chunked_summarize(self, text: str, max_length: int, min_length: int) -> str:
         """Fallback chunked summarization method."""

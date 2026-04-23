@@ -37,11 +37,11 @@ export default function Upload() {
     preprocessImages: true,
     ocrLanguages: 'eng+hin+mar',
     summaryType: FREE_TIER_MODE ? 'extractive' : 'abstractive',
-    maxLength: FREE_TIER_MODE ? 150 : 200,
-    minLength: FREE_TIER_MODE ? 30 : 50,
+    maxLength: FREE_TIER_MODE ? 120 : 180,
+    minLength: FREE_TIER_MODE ? 25 : 40,
     extractiveRatio: FREE_TIER_MODE ? 0.35 : 0.5,
     useCache: true,
-    usePipeline: !FREE_TIER_MODE
+    usePipeline: true
   });
 
   const [processingStep, setProcessingStep] = useState('');
@@ -757,6 +757,7 @@ export default function Upload() {
         query = new URLSearchParams({ 
           max_length: settings.maxLength, 
           min_length: settings.minLength,
+          model: 'sshleifer/distilbart-cnn-12-6',
           use_pipeline: settings.usePipeline
         }).toString();
       } else if (type === 'formatted-hybrid' || type === 'hybrid') {
@@ -765,6 +766,7 @@ export default function Upload() {
           extractive_ratio: settings.extractiveRatio, 
           max_length: settings.maxLength, 
           min_length: settings.minLength,
+          model: 'sshleifer/distilbart-cnn-12-6',
           use_cache: settings.useCache,
           use_pipeline: settings.usePipeline
         }).toString();
