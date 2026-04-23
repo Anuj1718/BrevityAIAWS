@@ -37,8 +37,8 @@ export default function Upload() {
     preprocessImages: true,
     ocrLanguages: 'eng+hin+mar',
     summaryType: FREE_TIER_MODE ? 'extractive' : 'abstractive',
-    maxLength: FREE_TIER_MODE ? 120 : 180,
-    minLength: FREE_TIER_MODE ? 25 : 40,
+    maxLength: FREE_TIER_MODE ? 150 : 220,
+    minLength: FREE_TIER_MODE ? 40 : 70,
     extractiveRatio: FREE_TIER_MODE ? 0.35 : 0.5,
     useCache: true,
     usePipeline: true
@@ -651,6 +651,13 @@ export default function Upload() {
         updateSettings({ useOcr });
       }
 
+      let useOcrForExtraction = settings.useOcr;
+      if (textTypeInfo && textTypeInfo.text_type === 'digital' && settings.useOcr) {
+        useOcrForExtraction = false;
+        updateSettings({ useOcr: false });
+        setProcessingStep('Document is digital text. OCR was auto-disabled for faster extraction...');
+      }
+
       const encodedFilename = encodeURIComponent(filename.replace(/\\/g, '/'));
 
       // Step 3: Extract text
@@ -658,7 +665,7 @@ export default function Upload() {
       setProgress(55);
       
       const extractParams = new URLSearchParams({
-        use_ocr: settings.useOcr,
+        use_ocr: useOcrForExtraction,
         lang: settings.ocrLanguages,
         chunk_size: 50,
         ocr_quality: settings.ocrQuality,
@@ -685,9 +692,9 @@ export default function Upload() {
       const cleanParams = new URLSearchParams({
         remove_stopwords: 'true',
         normalize_whitespace: 'true',
-        remove_special_chars: settings.useOcr ? 'false' : 'true',
-        min_sentence_length: settings.useOcr ? '5' : '15',
-        ocr_mode: settings.useOcr ? 'true' : 'false',
+        remove_special_chars: useOcrForExtraction ? 'false' : 'true',
+        min_sentence_length: useOcrForExtraction ? '5' : '15',
+        ocr_mode: useOcrForExtraction ? 'true' : 'false',
       });
 
       const cleanURL = `${API_BASE}/api/clean/text/${encodedFilename}?${cleanParams}`;
@@ -757,7 +764,7 @@ export default function Upload() {
         query = new URLSearchParams({ 
           max_length: settings.maxLength, 
           min_length: settings.minLength,
-          model: 'sshleifer/distilbart-cnn-12-6',
+          model: 'facebook/bart-large-cnn',
           use_pipeline: settings.usePipeline
         }).toString();
       } else if (type === 'formatted-hybrid' || type === 'hybrid') {
@@ -766,7 +773,7 @@ export default function Upload() {
           extractive_ratio: settings.extractiveRatio, 
           max_length: settings.maxLength, 
           min_length: settings.minLength,
-          model: 'sshleifer/distilbart-cnn-12-6',
+          model: 'facebook/bart-large-cnn',
           use_cache: settings.useCache,
           use_pipeline: settings.usePipeline
         }).toString();

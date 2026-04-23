@@ -126,7 +126,7 @@ class OptimizedTextSummarizer:
         filename: str, 
         max_length: int = 150, 
         min_length: int = 30, 
-        model: str = "sshleifer/distilbart-cnn-12-6",
+        model: str = "facebook/bart-large-cnn",
         use_pipeline: bool = True
     ) -> Dict[str, Any]:
         """Optimized abstractive summary with pipeline and chunking improvements."""
@@ -141,9 +141,9 @@ class OptimizedTextSummarizer:
         original_length = len(text)
         original_word_count = len(text.split())
 
-        # Keep abstractive generation practical for very large documents.
-        if original_word_count > 2600:
-            text = await self._reduce_text_for_abstractive(text, target_words=2200)
+        # Keep abstractive generation practical only for extremely large documents.
+        if original_word_count > 12000:
+            text = await self._reduce_text_for_abstractive(text, target_words=6000)
 
         if not TORCH_AVAILABLE:
             return await self._heuristic_abstractive_summary(
