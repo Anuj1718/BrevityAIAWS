@@ -37,6 +37,7 @@ class OptimizedTextSummarizer:
         self._abstractive_model = None
         self._abstractive_tokenizer = None
         self._summarization_pipeline = None
+        self._pipeline_result_key = "summary_text"
         
         # Thread pool for CPU-intensive tasks
         self._thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
@@ -154,7 +155,12 @@ class OptimizedTextSummarizer:
 
         # Use pipeline for better performance if available
         if use_pipeline and self._summarization_pipeline is None:
-            self._load_summarization_pipeline(model)
+            try:
+                self._load_summarization_pipeline(model)
+            except Exception as pipeline_error:
+                # Keep abstractive generation working even if pipeline task registration differs.
+                print(f"Warning: Summarization pipeline unavailable, using direct generation: {pipeline_error}")
+                use_pipeline = False
 
         if use_pipeline and self._summarization_pipeline is not None:
             summary_text = await self._pipeline_summarize(text, max_length, min_length)
@@ -310,12 +316,33 @@ class OptimizedTextSummarizer:
         """Load summarization pipeline for better performance."""
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch and transformers are required for pipeline summarization.")
-        
-        self._summarization_pipeline = pipeline(
-            "summarization",
-            model=model_name,
-            device=0 if torch.cuda.is_available() else -1,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+
+        pipeline_errors: List[str] = []
+        for task_name, result_key in (("summarization", "summary_text"), ("text2text-generation", "generated_text")):
+            try:
+                self._summarization_pipeline = pipeline(
+                    task_name,
+                    model=model_name,
+                    device=0 if torch.cuda.is_available() else -1,
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                )
+                self._pipeline_result_key = result_key
+                return
+            except Exception as exc:
+                pipeline_errors.append(f"{task_name}: {exc}")
+
+        raise RuntimeError("Unable to initialize summarization pipeline. " + " | ".join(pipeline_errors))
+
+    def _extract_pipeline_text(self, result: Dict[str, Any]) -> str:
+        """Normalize output key differences across pipeline tasks/versions."""
+        if not isinstance(result, dict):
+            return ""
+
+        return (
+            result.get(self._pipeline_result_key)
+            or result.get("summary_text")
+            or result.get("generated_text")
+            or ""
         )
 
     async def _pipeline_summarize(self, text: str, max_length: int, min_length: int) -> str:
@@ -340,7 +367,7 @@ class OptimizedTextSummarizer:
         
         for chunk in chunks:
             if len(chunk.strip()) > 50:  # Only process substantial chunks
-                summary = await loop.run_in_executor(
+                chunk_result = await loop.run_in_executor(
                     self._thread_pool,
                     lambda: self._summarization_pipeline(
                         chunk,
@@ -349,9 +376,11 @@ class OptimizedTextSummarizer:
                         do_sample=False,
                         num_beams=2,
                         early_stopping=True
-                    )[0]["summary_text"]
+                    )[0]
                 )
-                summaries.append(summary)
+                summary = self._extract_pipeline_text(chunk_result)
+                if summary:
+                    summaries.append(summary)
 
         combined_summary = " ".join(summaries)
 
@@ -359,7 +388,7 @@ class OptimizedTextSummarizer:
         if len(summaries) > 6 and len(combined_summary.split()) > (max_length * 2):
             final_max = max(max_length, 120)
             final_min = max(20, min(min_length, 60))
-            final_summary = await loop.run_in_executor(
+            final_result = await loop.run_in_executor(
                 self._thread_pool,
                 lambda: self._summarization_pipeline(
                     combined_summary,
@@ -368,9 +397,14 @@ class OptimizedTextSummarizer:
                     do_sample=False,
                     num_beams=2,
                     early_stopping=True
-                )[0]["summary_text"]
+                )[0]
             )
-            return final_summary
+            final_summary = self._extract_pipeline_text(final_result)
+            if final_summary:
+                return final_summary
+
+        if not combined_summary.strip():
+            raise ValueError("Pipeline returned empty abstractive summary")
 
         return combined_summary
 
