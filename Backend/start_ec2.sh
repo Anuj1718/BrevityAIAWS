@@ -14,7 +14,8 @@ pip install -r requirements.txt
 
 python download_nltk.py
 
-export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:5173}"
+export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:5173,https://main.degqsw0mhmm75.amplifyapp.com}"
+export PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-brevity.duckdns.org}"
 export UPLOADS_DIR="${UPLOADS_DIR:-$BASE_DIR/app/uploads}"
 export OUTPUTS_DIR="${OUTPUTS_DIR:-$BASE_DIR/app/outputs}"
 

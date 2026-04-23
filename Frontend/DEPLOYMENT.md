@@ -35,7 +35,7 @@ All these files tell the server to redirect all routes to `index.html`, allowing
    - **Build Command**: `npm install && npm run build`
    - **Publish Directory**: `dist`
 4. Add Environment Variable:
-   - `VITE_API_URL` = `https://your-backend-url.onrender.com`
+   - `VITE_API_URL` = `https://brevity.duckdns.org`
 5. Deploy!
 
 The `render.yaml` file will handle the routing automatically.
@@ -116,7 +116,14 @@ cloudinary
 
 ### Frontend (.env)
 ```env
-VITE_API_URL=https://your-backend.onrender.com
+VITE_API_URL=https://brevity.duckdns.org
+```
+
+### Backend (.env)
+```env
+ALLOWED_ORIGINS=https://main.degqsw0mhmm75.amplifyapp.com,http://localhost:5173
+PUBLIC_DOMAIN=brevity.duckdns.org
+BACKEND_HOST=127.0.0.1
 ```
 
 ### Backend (.env)

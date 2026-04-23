@@ -1,0 +1,20 @@
+[Unit]
+Description=Brevity AI backend API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/BrevityAIAWS/Backend
+Environment="ALLOWED_ORIGINS=https://main.degqsw0mhmm75.amplifyapp.com,http://localhost:5173"
+Environment="PUBLIC_DOMAIN=brevity.duckdns.org"
+Environment="BACKEND_HOST=127.0.0.1"
+Environment="PORT=8000"
+ExecStart=/home/ubuntu/BrevityAIAWS/Backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

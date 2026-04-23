@@ -2,7 +2,19 @@ import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import './Upload.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const DEFAULT_DEV_API_BASE = 'http://127.0.0.1:8000';
+const DEFAULT_PROD_API_BASE = 'https://brevity.duckdns.org';
+
+function resolveApiBase() {
+  const configured = import.meta.env.VITE_API_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+
+  return import.meta.env.DEV ? DEFAULT_DEV_API_BASE : DEFAULT_PROD_API_BASE;
+}
+
+const API_BASE = resolveApiBase();
 const FREE_TIER_MODE = (import.meta.env.VITE_FREE_TIER_MODE || 'true').toLowerCase() === 'true';
 
 export default function Upload() {
