@@ -23,9 +23,7 @@ export function AuthProvider({ children }) {
       
       // Fetch user profile from Firestore
       try {
-        console.log('Fetching user profile for:', user.uid);
         const profile = await getUserProfile(user.uid);
-        console.log('User profile loaded:', profile);
         setUserProfile(profile);
       } catch (error) {
         console.error('Error fetching user profile:', error);

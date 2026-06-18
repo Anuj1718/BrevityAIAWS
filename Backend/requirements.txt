@@ -13,11 +13,10 @@ nltk==3.8.1
 scikit-learn==1.3.2
 numpy==1.26.4
 
-# Machine Learning and Transformers (disabled for free tier - needs 2GB+ RAM)
-# Uncomment below for abstractive summarization on paid plans
-# torch>=2.2.0
-# transformers>=4.35.0
-# tokenizers>=0.14.0
+# Machine Learning and Transformers (GPU deployment)
+torch>=2.2.0
+transformers>=4.35.0
+tokenizers>=0.14.0
 
 # Data processing
 pandas==2.1.3

@@ -1,23 +1,26 @@
-FROM python:3.12-slim
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     UPLOADS_DIR=/data/uploads \
-    OUTPUTS_DIR=/data/outputs
+    OUTPUTS_DIR=/data/outputs \
+    DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
 RUN mkdir -p /data/uploads /data/outputs
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-hin \
     tesseract-ocr-mar \
     build-essential \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python
 
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt

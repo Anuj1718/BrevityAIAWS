@@ -3,12 +3,14 @@ PDF Summarization Project - FastAPI Entry Point
 Main application file that sets up the FastAPI server and includes all routers.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from pathlib import Path
 import os
+import asyncio
 
 # Import routers
 from app.routers import upload, extract, clean, summarize, translate_summary
@@ -28,11 +30,51 @@ def _resolve_directory(env_name: str, default_path: Path) -> Path:
     return default_path
 
 
+async def _preload_models():
+    """Preload ML models in the background after server starts."""
+    await asyncio.sleep(2)  # Let the server finish starting first
+    try:
+        # Check if torch is available
+        import torch
+        gpu_available = torch.cuda.is_available()
+        gpu_name = torch.cuda.get_device_name(0) if gpu_available else "None"
+        print(f"[Startup] GPU: {gpu_name} | CUDA: {gpu_available}")
+
+        # Preload BART summarization model
+        print("[Startup] Preloading BART summarization model...")
+        from transformers import pipeline
+        _pipeline = pipeline(
+            "summarization",
+            model="facebook/bart-large-cnn",
+            device=0 if gpu_available else -1,
+            torch_dtype=torch.float16 if gpu_available else torch.float32
+        )
+        # Store on the summarizer instance for reuse
+        summarize.summarizer._summarization_pipeline = _pipeline
+        summarize.summarizer._pipeline_result_key = "summary_text"
+        print("[Startup] ✅ BART model loaded and ready!")
+
+    except ImportError:
+        print("[Startup] PyTorch not available — running in extractive-only mode")
+    except Exception as e:
+        print(f"[Startup] Model preload warning: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: preload models on startup."""
+    # Start model preloading in background
+    preload_task = asyncio.create_task(_preload_models())
+    yield
+    preload_task.cancel()
+
+
 # Create FastAPI app
 app = FastAPI(
     title="PDF Summarization API",
     description="API for uploading, extracting, cleaning, and summarizing PDF documents",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -87,8 +129,19 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
+    """Health check endpoint with GPU status."""
+    status = {"status": "healthy"}
+    try:
+        import torch
+        status["gpu_available"] = torch.cuda.is_available()
+        if torch.cuda.is_available():
+            status["gpu_name"] = torch.cuda.get_device_name(0)
+            status["gpu_memory_allocated"] = f"{torch.cuda.memory_allocated(0) / 1024**2:.0f} MB"
+        status["bart_loaded"] = summarize.summarizer._summarization_pipeline is not None
+    except ImportError:
+        status["gpu_available"] = False
+        status["bart_loaded"] = False
+    return status
 
 if __name__ == "__main__":
     import uvicorn

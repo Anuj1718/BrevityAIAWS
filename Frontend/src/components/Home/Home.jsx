@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
-import Spline from '@splinetool/react-spline';
 import './Home.css';
 import FAQ from './FAQ.jsx';
+
+// Lazy-load the heavy Spline 3D component (~3.2 MB)
+const Spline = lazy(() => import('@splinetool/react-spline'));
 
 // ShaderGradient background for the “showcase” panel
 const SHADER_URL =
@@ -15,7 +17,9 @@ export default function Home() {
       <main className="hero">
         <div className="hero-bg" aria-hidden="true">
           {/* <Spline scene="https://prod.spline.design/9VtlTTrUq9NRjQsM/scene.splinecode" />  */}
-          <Spline scene="https://prod.spline.design/9bhPBNgr9ongm3Jr/scene.splinecode"/>
+          <Suspense fallback={<div className="hero-bg-placeholder" />}>
+            <Spline scene="https://prod.spline.design/9bhPBNgr9ongm3Jr/scene.splinecode"/>
+          </Suspense>
         </div>
         <div className="hero-scrim" aria-hidden="true" />
 

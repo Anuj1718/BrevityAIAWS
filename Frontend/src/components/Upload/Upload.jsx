@@ -606,7 +606,6 @@ export default function Upload() {
         xhr.send(formData);
       });
 
-      console.log('UPLOAD RESPONSE:', uploadJson);
 
       let filename = null;
       if (uploadJson) {
@@ -621,7 +620,6 @@ export default function Upload() {
       if (!filename) {
         const listResp = await fetch(`${API_BASE}/api/upload/files`);
         const listJson = await safeJson(listResp);
-        console.log('UPLOAD FILES LIST:', listResp.status, listJson);
         if (listJson?.files?.length) {
           const found = [...listJson.files].reverse().find(f =>
             (f.filename && f.filename.endsWith(originalName)) ||
@@ -637,7 +635,6 @@ export default function Upload() {
         throw new Error(`Upload did not return backend filename. Debug: ${debug}`);
       }
 
-      console.log('Using backend filename:', filename);
       setBackendFilename(filename);
 
       // Step 2: Detect text type and suggest OCR if needed
@@ -679,7 +676,6 @@ export default function Upload() {
         body: '{}' 
       });
       const extractJson = await safeJson(extractResp);
-      console.log('EXTRACT RESP:', extractResp.status, extractJson);
       if (!extractResp.ok) {
         const msg = (extractJson && (extractJson.detail || extractJson.message)) || `status ${extractResp.status}`;
         throw new Error(`Extraction failed: ${msg}`);
@@ -704,7 +700,6 @@ export default function Upload() {
         body: '{}' 
       });
       const cleanJson = await safeJson(cleanResp);
-      console.log('CLEAN RESP:', cleanResp.status, cleanJson);
       if (!cleanResp.ok) {
         const msg = (cleanJson && (cleanJson.detail || cleanJson.message)) || `status ${cleanResp.status}`;
         throw new Error(`Cleaning failed: ${msg}`);
@@ -782,7 +777,6 @@ export default function Upload() {
       }
 
       const fullUrl = query ? `${url}?${query}` : url;
-      console.log('SUMMARY REQUEST:', fullUrl);
 
       // Simulate progress for better UX
       const progressInterval = setInterval(() => {
@@ -795,7 +789,6 @@ export default function Upload() {
         body: '{}' 
       });
       const json = await safeJson(resp);
-      console.log('SUMMARY RESP:', resp.status, json);
 
       clearInterval(progressInterval);
       setProgress(100);
@@ -847,7 +840,6 @@ export default function Upload() {
       });
       const json = await safeJson(resp);
       
-      console.log('Translation response:', json);
 
       if (!resp.ok) {
         throw new Error(json?.detail || json?.message || 'Translation failed');
