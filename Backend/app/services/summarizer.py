@@ -131,13 +131,24 @@ class OptimizedTextSummarizer:
     ) -> Dict[str, Any]:
         """Optimized abstractive summary with pipeline and chunking improvements."""
 
-        cleaning_metadata_path = os.path.join(self.output_dir, f"{os.path.splitext(filename)[0]}_cleaning_metadata.json")
-        if not os.path.exists(cleaning_metadata_path):
-            raise FileNotFoundError(f"Cleaned text not found for: {filename}")
+        # Prefer original extracted text for abstractive (BART needs full sentences with stopwords)
+        base_name = os.path.splitext(filename)[0]
+        extracted_path = os.path.join(self.output_dir, f"{base_name}_extracted.txt")
+        cleaning_metadata_path = os.path.join(self.output_dir, f"{base_name}_cleaning_metadata.json")
 
-        with open(cleaning_metadata_path, 'r', encoding='utf-8') as f:
-            cleaning_data = json.load(f)
-        text = cleaning_data["cleaned_text"]
+        if os.path.exists(extracted_path):
+            with open(extracted_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+            # Strip page markers like "--- Page 1 ---"
+            import re
+            text = re.sub(r'\n?---\s*Page\s*\d+\s*---\n?', ' ', text).strip()
+        elif os.path.exists(cleaning_metadata_path):
+            with open(cleaning_metadata_path, 'r', encoding='utf-8') as f:
+                cleaning_data = json.load(f)
+            text = cleaning_data["cleaned_text"]
+        else:
+            raise FileNotFoundError(f"No extracted or cleaned text found for: {filename}")
+
         original_length = len(text)
         original_word_count = len(text.split())
 
