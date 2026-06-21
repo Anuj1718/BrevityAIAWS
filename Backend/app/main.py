@@ -40,19 +40,21 @@ async def _preload_models():
         gpu_name = torch.cuda.get_device_name(0) if gpu_available else "None"
         print(f"[Startup] GPU: {gpu_name} | CUDA: {gpu_available}")
 
-        # Preload BART summarization model
+        # Preload BART summarization model using direct model loading
+        # (pipeline task names changed in transformers 5.x)
         print("[Startup] Preloading BART summarization model...")
-        from transformers import pipeline
-        _pipeline = pipeline(
-            "summarization",
-            model="facebook/bart-large-cnn",
-            device=0 if gpu_available else -1,
-            torch_dtype=torch.float16 if gpu_available else torch.float32
+        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+        model_name = "facebook/bart-large-cnn"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_name,
+            dtype=torch.float16 if gpu_available else torch.float32,
+            device_map="auto" if gpu_available else None
         )
         # Store on the summarizer instance for reuse
-        summarize.summarizer._summarization_pipeline = _pipeline
-        summarize.summarizer._pipeline_result_key = "summary_text"
-        print("[Startup] ✅ BART model loaded and ready!")
+        summarize.summarizer._abstractive_model = model
+        summarize.summarizer._abstractive_tokenizer = tokenizer
+        print(f"[Startup] ✅ BART model loaded and ready! (GPU: {gpu_available})")
 
     except ImportError:
         print("[Startup] PyTorch not available — running in extractive-only mode")
@@ -83,7 +85,7 @@ app.add_middleware(
     allow_origins=_parse_origins(
         os.getenv(
             "ALLOWED_ORIGINS",
-            "http://localhost:3000,http://localhost:5173,https://main.degqsw0mhmm75.amplifyapp.com"
+            "http://localhost:3000,http://localhost:5173,https://brevityaiapp.vercel.app"
         )
     ),
     allow_credentials=True,
@@ -137,7 +139,7 @@ async def health_check():
         if torch.cuda.is_available():
             status["gpu_name"] = torch.cuda.get_device_name(0)
             status["gpu_memory_allocated"] = f"{torch.cuda.memory_allocated(0) / 1024**2:.0f} MB"
-        status["bart_loaded"] = summarize.summarizer._summarization_pipeline is not None
+        status["bart_loaded"] = summarize.summarizer._abstractive_model is not None
     except ImportError:
         status["gpu_available"] = False
         status["bart_loaded"] = False

@@ -13,7 +13,7 @@ class TextCleaner:
     """Handles text cleaning and normalization operations."""
     
     def __init__(self):
-        self.output_dir = "outputs"
+        self.output_dir = os.getenv("OUTPUTS_DIR", "outputs")
         self.text_utils = TextUtils()
         self.ensure_directories()
     

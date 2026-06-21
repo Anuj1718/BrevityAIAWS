@@ -34,8 +34,8 @@ class EnhancedPDFExtractor:
     """Enhanced PDF extractor with optimized OCR and multi-language support."""
 
     def __init__(self):
-        self.upload_dir = "uploads"
-        self.output_dir = "outputs"
+        self.upload_dir = os.getenv("UPLOADS_DIR", "uploads")
+        self.output_dir = os.getenv("OUTPUTS_DIR", "outputs")
         self.ensure_directories()
         
         # Configure tesseract path

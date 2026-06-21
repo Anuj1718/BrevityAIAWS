@@ -29,7 +29,7 @@ class OptimizedTextSummarizer:
     """Optimized text summarizer with performance improvements and caching."""
 
     def __init__(self):
-        self.output_dir = "outputs"
+        self.output_dir = os.getenv("OUTPUTS_DIR", "outputs")
         self.text_utils = TextUtils()
         self.ensure_directories()
         
@@ -308,7 +308,7 @@ class OptimizedTextSummarizer:
         self._abstractive_tokenizer = AutoTokenizer.from_pretrained(model_name)
         self._abstractive_model = AutoModelForSeq2SeqLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto" if torch.cuda.is_available() else None
         )
 
@@ -324,7 +324,7 @@ class OptimizedTextSummarizer:
                     task_name,
                     model=model_name,
                     device=0 if torch.cuda.is_available() else -1,
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                    dtype=torch.float16 if torch.cuda.is_available() else torch.float32
                 )
                 self._pipeline_result_key = result_key
                 return

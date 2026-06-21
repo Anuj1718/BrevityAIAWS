@@ -267,7 +267,7 @@ class EnhancedTranslator:
     """Enhanced translator with multiple providers and fallback mechanisms."""
     
     def __init__(self):
-        self.output_dir = "outputs"
+        self.output_dir = os.getenv("OUTPUTS_DIR", "outputs")
         self.ensure_directories()
         
         # Initialize providers
