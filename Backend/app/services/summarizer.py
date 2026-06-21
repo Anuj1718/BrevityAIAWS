@@ -374,7 +374,9 @@ class OptimizedTextSummarizer:
                         max_length=max_length,
                         min_length=min_length,
                         do_sample=False,
-                        num_beams=2,
+                        num_beams=4,
+                        no_repeat_ngram_size=3,
+                        length_penalty=1.2,
                         early_stopping=True
                     )[0]
                 )
@@ -395,7 +397,9 @@ class OptimizedTextSummarizer:
                     max_length=final_max,
                     min_length=final_min,
                     do_sample=False,
-                    num_beams=2,
+                    num_beams=4,
+                    no_repeat_ngram_size=3,
+                    length_penalty=1.2,
                     early_stopping=True
                 )[0]
             )
@@ -436,12 +440,35 @@ class OptimizedTextSummarizer:
                     inputs["input_ids"], 
                     max_length=max_length, 
                     min_length=min_length, 
-                    num_beams=2, 
+                    num_beams=4, 
+                    no_repeat_ngram_size=3,
+                    length_penalty=1.2,
                     early_stopping=True
                 )
             summaries.append(self._abstractive_tokenizer.decode(summary_ids[0], skip_special_tokens=True))
 
-        return " ".join(summaries)
+        combined = " ".join(summaries)
+
+        # Second pass: refine if too many chunks produced a long, fragmented summary
+        if len(summaries) > 3 and len(combined.split()) > (max_length * 2):
+            refine_input = self._abstractive_tokenizer(
+                combined, max_length=1024, truncation=True, return_tensors="pt"
+            ).to(device)
+            with torch.no_grad():
+                refined_ids = self._abstractive_model.generate(
+                    refine_input["input_ids"],
+                    max_length=max(max_length, 120),
+                    min_length=max(20, min(min_length, 60)),
+                    num_beams=4,
+                    no_repeat_ngram_size=3,
+                    length_penalty=1.2,
+                    early_stopping=True
+                )
+            refined = self._abstractive_tokenizer.decode(refined_ids[0], skip_special_tokens=True)
+            if refined.strip():
+                return refined
+
+        return combined
 
     # -------------------- Optimized Helper Methods --------------------
     async def _optimized_textrank_summarize(self, sentences: List[str], num_sentences: int, use_cache: bool = True) -> List[str]:
