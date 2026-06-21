@@ -378,11 +378,17 @@ class EnhancedTranslator:
         Returns:
             Dictionary with translated summary and metadata
         """
-        # Get summary metadata
-        summary_metadata_path = os.path.join(
-            self.output_dir, 
-            f"{os.path.splitext(filename)[0]}_{summary_type}_summary_metadata.json"
-        )
+        # Get summary metadata - handle formatted-hybrid naming difference
+        base_name = os.path.splitext(filename)[0]
+        if summary_type in ("formatted-hybrid", "formatted_hybrid"):
+            # Formatted hybrid saves as _formatted_summary.json (different pattern)
+            summary_metadata_path = os.path.join(
+                self.output_dir, f"{base_name}_formatted_summary.json"
+            )
+        else:
+            summary_metadata_path = os.path.join(
+                self.output_dir, f"{base_name}_{summary_type}_summary_metadata.json"
+            )
         
         if not os.path.exists(summary_metadata_path):
             raise FileNotFoundError(f"{summary_type.title()} summary not found for: {filename}")
@@ -390,7 +396,12 @@ class EnhancedTranslator:
         with open(summary_metadata_path, 'r', encoding='utf-8') as f:
             summary_data = json.load(f)
         
-        summary_text = summary_data.get("summary_text", "")
+        # Formatted hybrid uses 'final_abstract' key; others use 'summary_text'
+        summary_text = (
+            summary_data.get("summary_text")
+            or summary_data.get("final_abstract")
+            or ""
+        )
         
         # Translate the summary
         translation_result = await self.translate_text(
